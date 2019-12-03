@@ -5,10 +5,39 @@
 #include <netinet/in.h> // for sockaddr_in
 #include <sys/socket.h> // for socket
 #include <stdlib.h> // for exit
+#include <vector>
+#include <thread> // for multi connect
 
 void usage() {
 	printf("syntax : echo_server <port> [-b]\n");
 	printf("sample : echo_server 1234 -b\n");
+}
+
+void echo(int childfd) {
+	if (childfd < 0) {
+		perror("ERROR on accept");
+		return;
+	}
+	printf("connected\n");
+
+	while (true) {
+		const static int BUFSIZE = 1024;
+		char buf[BUFSIZE];
+
+		ssize_t received = recv(childfd, buf, BUFSIZE - 1, 0);
+		if (received == 0 || received == -1) {
+			perror("recv failed");
+			break;
+		}
+		buf[received] = '\0';
+		printf("%s\n", buf);
+
+		ssize_t sent = send(childfd, buf, strlen(buf), 0);
+		if (sent == 0) {
+			perror("send failed");
+			break;
+		}
+	}
 }
 
 int main(int argc, char ** argv) {
@@ -43,35 +72,15 @@ int main(int argc, char ** argv) {
 		perror("listen failed");
 		return -1;
 	}
-
+	
+	std::vector<std::thread> threads;
 	while (true) {
 		struct sockaddr_in addr;
 		socklen_t clientlen = sizeof(sockaddr);
+		
 		int childfd = accept(sockfd, reinterpret_cast<struct sockaddr*>(&addr), &clientlen);
-		if (childfd < 0) {
-			perror("ERROR on accept");
-			break;
-		}
-		printf("connected\n");
 
-		while (true) {
-			const static int BUFSIZE = 1024;
-			char buf[BUFSIZE];
-
-			ssize_t received = recv(childfd, buf, BUFSIZE - 1, 0);
-			if (received == 0 || received == -1) {
-				perror("recv failed");
-				break;
-			}
-			buf[received] = '\0';
-			printf("%s\n", buf);
-
-			ssize_t sent = send(childfd, buf, strlen(buf), 0);
-			if (sent == 0) {
-				perror("send failed");
-				break;
-			}
-		}
+		threads.push_back(std::thread(echo, std::ref(childfd)));
 	}
 
 	close(sockfd);
