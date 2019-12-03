@@ -4,8 +4,19 @@
 #include <arpa/inet.h> // for htons
 #include <netinet/in.h> // for sockaddr_in
 #include <sys/socket.h> // for socket
+#include <stdlib.h> // for exit
 
-int main() {
+void usage() {
+	printf("syntax : echo_server <port> [-b]\n");
+	printf("sample : echo_server 1234 -b\n");
+}
+
+int main(int argc, char ** argv) {
+	if(!(argc == 3 && argv[2][0] == '-' && argv[2][1] == 'b') && argc != 2) {
+		usage();
+		exit(1);
+	}
+
 	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1) {
 		perror("socket failed");
@@ -17,7 +28,7 @@ int main() {
 
 	struct sockaddr_in addr;
 	addr.sin_family = AF_INET;
-	addr.sin_port = htons(1234);
+	addr.sin_port = htons(atoi(argv[1]));
 	addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	memset(addr.sin_zero, 0, sizeof(addr.sin_zero));
 
