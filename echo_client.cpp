@@ -5,6 +5,26 @@
 #include <netinet/in.h> // for sockaddr_in
 #include <sys/socket.h> // for socket
 #include <stdlib.h> // for exit
+#include <vector>
+#include <thread> // for print msg
+
+using namespace std;
+
+const static int BUFSIZE = 1024;
+int sockfd;
+
+void recv_msg() {
+	while(true) {
+		char buf[BUFSIZE];
+		ssize_t received = recv(sockfd, buf, BUFSIZE - 1, 0);
+		if (received == 0 || received == -1) {
+			perror("recv failed");
+			exit(1);
+		}
+		buf[received] = '\0';
+		printf("%s\n", buf);
+	}
+}
 
 void usage() {
 	printf("syntax : echo_client <host> <port>\n");
@@ -17,7 +37,7 @@ int main(int argc, char ** argv) {
 		exit(1);
 	}
 
-	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1) {
 		perror("socket failed");
 		return -1;
@@ -38,9 +58,10 @@ int main(int argc, char ** argv) {
 		return -1;
 	}
 	printf("connected\n");
-
+	
+	thread t(recv_msg);
+	
 	while (true) {
-		const static int BUFSIZE = 1024;
 		char buf[BUFSIZE];
 
 		scanf("%s", buf);
@@ -51,15 +72,6 @@ int main(int argc, char ** argv) {
 			perror("send failed");
 			break;
 		}
-
-		ssize_t received = recv(sockfd, buf, BUFSIZE - 1, 0);
-		if (received == 0 || received == -1) {
-			perror("recv failed");
-			break;
-		}
-		buf[received] = '\0';
-		printf("%s\n", buf);
 	}
-
 	close(sockfd);
 }

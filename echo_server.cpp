@@ -5,13 +5,12 @@
 #include <netinet/in.h> // for sockaddr_in
 #include <sys/socket.h> // for socket
 #include <stdlib.h> // for exit
-#include <vector>
+#include <map>
 #include <thread> // for multi connect
 
-void usage() {
-	printf("syntax : echo_server <port> [-b]\n");
-	printf("sample : echo_server 1234 -b\n");
-}
+std::map<int, bool> valid;
+std::map<int, std::thread> threads;
+bool b;
 
 void echo(int childfd) {
 	if (childfd < 0) {
@@ -31,13 +30,32 @@ void echo(int childfd) {
 		}
 		buf[received] = '\0';
 		printf("%s\n", buf);
-
-		ssize_t sent = send(childfd, buf, strlen(buf), 0);
-		if (sent == 0) {
-			perror("send failed");
-			break;
+		
+		if(b) {
+			for(auto it = threads.begin(); it != threads.end(); it++) {
+				if(valid.find(it->first)->second) {
+					ssize_t sent = send(it->first, buf, strlen(buf), 0);
+					if (sent == 0) {
+						perror("send failed");
+					}
+				}
+			}
+		}
+		else {
+			ssize_t sent = send(childfd, buf, strlen(buf), 0);
+			if (sent == 0) {
+				perror("send failed");
+				break;
+			}
 		}
 	}
+	
+	valid.find(childfd)->second = false;
+}
+
+void usage() {
+	printf("syntax : echo_server <port> [-b]\n");
+	printf("sample : echo_server 1234 -b\n");
 }
 
 int main(int argc, char ** argv) {
@@ -45,6 +63,7 @@ int main(int argc, char ** argv) {
 		usage();
 		exit(1);
 	}
+	if(argc == 3) b = true;
 
 	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1) {
@@ -73,15 +92,14 @@ int main(int argc, char ** argv) {
 		return -1;
 	}
 	
-	std::vector<std::thread> threads;
 	while (true) {
 		struct sockaddr_in addr;
 		socklen_t clientlen = sizeof(sockaddr);
 		
 		int childfd = accept(sockfd, reinterpret_cast<struct sockaddr*>(&addr), &clientlen);
-
-		threads.push_back(std::thread(echo, std::ref(childfd)));
+		
+		valid.insert(std::make_pair(childfd, true));
+		threads.insert(std::make_pair(childfd, std::thread(echo, std::ref(childfd))));
 	}
-
 	close(sockfd);
 }
