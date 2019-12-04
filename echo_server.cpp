@@ -5,19 +5,22 @@
 #include <netinet/in.h> // for sockaddr_in
 #include <sys/socket.h> // for socket
 #include <stdlib.h> // for exit
-#include <map>
+
+#include <set>
+#include <vector>
 #include <thread> // for multi connect
 
-std::map<int, bool> valid;
-std::map<int, std::thread> threads;
-bool b;
+using namespace std;
+
+set<int> Clients;
+bool bflag;
 
 void echo(int childfd) {
 	if (childfd < 0) {
 		perror("ERROR on accept");
 		return;
 	}
-	printf("connected\n");
+	printf("connected  [Client %d]\n", childfd);
 
 	while (true) {
 		const static int BUFSIZE = 1024;
@@ -25,32 +28,32 @@ void echo(int childfd) {
 
 		ssize_t received = recv(childfd, buf, BUFSIZE - 1, 0);
 		if (received == 0 || received == -1) {
-			perror("recv failed");
+			printf("recv failed to %d\n", childfd);
+			Clients.erase(childfd);
 			break;
 		}
-		buf[received] = '\0';
+		snprintf(buf+received, 14, "  [Client %d]\0", childfd);
 		printf("%s\n", buf);
 		
-		if(b) {
-			for(auto it = threads.begin(); it != threads.end(); it++) {
-				if(valid.find(it->first)->second) {
-					ssize_t sent = send(it->first, buf, strlen(buf), 0);
-					if (sent == 0) {
-						perror("send failed");
-					}
+		if(bflag) {
+			for(auto it = Clients.begin(); it != Clients.end(); it++) {
+				ssize_t sent = send(*it, buf, strlen(buf), 0);
+				if (sent == 0) {
+					printf("send failed to %d", childfd);
+					Clients.erase(childfd);
 				}
 			}
 		}
 		else {
 			ssize_t sent = send(childfd, buf, strlen(buf), 0);
 			if (sent == 0) {
-				perror("send failed");
+				printf("send failed to %d", childfd);
+				Clients.erase(childfd);
 				break;
 			}
 		}
 	}
 	
-	valid.find(childfd)->second = false;
 }
 
 void usage() {
@@ -63,7 +66,7 @@ int main(int argc, char ** argv) {
 		usage();
 		exit(1);
 	}
-	if(argc == 3) b = true;
+	if(argc == 3) bflag = true;
 
 	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1) {
@@ -92,14 +95,15 @@ int main(int argc, char ** argv) {
 		return -1;
 	}
 	
+	vector<thread> T;
 	while (true) {
 		struct sockaddr_in addr;
 		socklen_t clientlen = sizeof(sockaddr);
 		
 		int childfd = accept(sockfd, reinterpret_cast<struct sockaddr*>(&addr), &clientlen);
 		
-		valid.insert(std::make_pair(childfd, true));
-		threads.insert(std::make_pair(childfd, std::thread(echo, std::ref(childfd))));
+		Clients.insert(childfd);
+		T.push_back(thread(echo, childfd));
 	}
 	close(sockfd);
 }

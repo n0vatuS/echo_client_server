@@ -59,11 +59,10 @@ int main(int argc, char ** argv) {
 	}
 	printf("connected\n");
 	
-	thread t(recv_msg);
-	
+	thread T(recv_msg);
+
 	while (true) {
 		char buf[BUFSIZE];
-
 		scanf("%s", buf);
 		if (strcmp(buf, "quit") == 0) break;
 
